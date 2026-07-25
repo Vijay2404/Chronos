@@ -12,5 +12,6 @@ chronos-sdk = { workspace = true }
 [tool.uv.workspace]
 members = [
     "sdk/python",
-    "server"
+    "server",
+    "agent-playground"
 ]

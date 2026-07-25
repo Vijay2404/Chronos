@@ -1,0 +1,120 @@
+{
+  "description": "Represents a specific step in an agent's execution (e.g., an LLM call or a Tool call).",
+  "properties": {
+    "id": {
+      "format": "uuid4",
+      "title": "Id",
+      "type": "string"
+    },
+    "trace_id": {
+      "format": "uuid4",
+      "title": "Trace Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "span_id": {
+      "format": "uuid4",
+      "title": "Span Id",
+      "type": "string"
+    },
+    "parent_span_id": {
+      "anyOf": [
+        {
+          "format": "uuid4",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Span Id"
+    },
+    "span_type": {
+      "description": "e.g., 'llm', 'tool', 'reasoning'",
+      "title": "Span Type",
+      "type": "string"
+    },
+    "status": {
+      "description": "'success' or 'error'",
+      "title": "Status",
+      "type": "string"
+    },
+    "inputs": {
+      "additionalProperties": true,
+      "title": "Inputs",
+      "type": "object"
+    },
+    "outputs": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outputs"
+    },
+    "token_usage": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Token Usage"
+    },
+    "end_timestamp": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "End Timestamp"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    }
+  },
+  "required": [
+    "id",
+    "trace_id",
+    "name",
+    "span_id",
+    "span_type",
+    "status"
+  ],
+  "title": "AgentSpan",
+  "type": "object"
+}

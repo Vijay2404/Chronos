@@ -1,0 +1,48 @@
+{
+  "description": "Represents a snapshot of the agent's internal state at a specific point in time.",
+  "properties": {
+    "id": {
+      "format": "uuid4",
+      "title": "Id",
+      "type": "string"
+    },
+    "trace_id": {
+      "format": "uuid4",
+      "title": "Trace Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "span_id": {
+      "format": "uuid4",
+      "title": "Span Id",
+      "type": "string"
+    },
+    "state_blob": {
+      "description": "The serialized state. Can be JSON or binary if using cloudpickle.",
+      "title": "State Blob"
+    },
+    "is_binary": {
+      "default": false,
+      "description": "True if state_blob is pickled binary data.",
+      "title": "Is Binary",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "trace_id",
+    "name",
+    "span_id",
+    "state_blob"
+  ],
+  "title": "CheckpointEvent",
+  "type": "object"
+}

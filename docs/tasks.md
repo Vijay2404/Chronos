@@ -1,13 +1,13 @@
 # Implementation Roadmap
 
-- `[ ]` **Phase 1: Core Data Models & Schemas**
-  - `[ ]` Define OpenTelemetry extension schemas (AgentTrace, AgentSpan, CheckpointEvent).
-  - `[ ]` Create protobuf/JSON schema definitions.
+- `[x]` **Phase 1: Core Data Models & Schemas**
+  - `[x]` Define OpenTelemetry extension schemas (AgentTrace, AgentSpan, CheckpointEvent).
+  - `[x]` Create protobuf/JSON schema definitions.
 
-- `[ ]` **Phase 2: Python SDK Foundation**
+- `[x]` **Phase 2: Python SDK Foundation**
   - `[x]` Setup Core Tracer and OTEL exporter.
   - `[x]` Implement Determinism Module (random/datetime overriding).
-  - `[ ]` Implement VCR Interceptor Layer (requests/httpx mocking & recording).
+  - `[x]` Implement VCR Interceptor Layer (requests/httpx mocking & recording).
   - `[x]` Implement Hybrid State Checkpointer (JSON primary, Cloudpickle fallback).
 
 - `[ ]` **Phase 3: Framework Adapters**

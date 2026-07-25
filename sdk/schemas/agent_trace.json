@@ -1,0 +1,50 @@
+{
+  "description": "Represents a full execution run of an agent.",
+  "properties": {
+    "trace_id": {
+      "format": "uuid4",
+      "title": "Trace Id",
+      "type": "string"
+    },
+    "name": {
+      "description": "Name of the agent or task",
+      "title": "Name",
+      "type": "string"
+    },
+    "start_time": {
+      "format": "date-time",
+      "title": "Start Time",
+      "type": "string"
+    },
+    "end_time": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "End Time"
+    },
+    "status": {
+      "description": "'running', 'success', 'error'",
+      "title": "Status",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "trace_id",
+    "name",
+    "status"
+  ],
+  "title": "AgentTrace",
+  "type": "object"
+}

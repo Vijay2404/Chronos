@@ -1,0 +1,31 @@
+{
+  "description": "Base model for all events in the Chronos system.",
+  "properties": {
+    "id": {
+      "format": "uuid4",
+      "title": "Id",
+      "type": "string"
+    },
+    "trace_id": {
+      "format": "uuid4",
+      "title": "Trace Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "trace_id",
+    "name"
+  ],
+  "title": "AgentEvent",
+  "type": "object"
+}

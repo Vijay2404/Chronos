@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from contextlib import contextmanager
 
-from chronos.schemas import AgentTrace, AgentSpan, CheckpointEvent
-from chronos.determinism import deterministic_context
+from chronos.core.schemas import AgentTrace, AgentSpan, CheckpointEvent
+from chronos.core.determinism import deterministic_context
 
 logger = logging.getLogger("chronos.sdk")
 

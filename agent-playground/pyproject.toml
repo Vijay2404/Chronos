@@ -1,0 +1,16 @@
+[project]
+name = "agent-playground"
+version = "0.1.0"
+description = "Test playground for Chronos SDK with various agent frameworks."
+requires-python = ">=3.10"
+dependencies = [
+    "chronos-sdk",
+    "requests",
+    "python-dotenv",
+    "langgraph>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "crewai>=0.28.0"
+]
+
+[tool.uv.sources]
+chronos-sdk = { workspace = true }
