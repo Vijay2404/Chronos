@@ -5,10 +5,10 @@
   - `[ ]` Create protobuf/JSON schema definitions.
 
 - `[ ]` **Phase 2: Python SDK Foundation**
-  - `[ ]` Setup Core Tracer and OTEL exporter.
-  - `[ ]` Implement Determinism Module (random/datetime overriding).
-  - `[ ]` Implement Network/LLM Interceptor hooks.
-  - `[ ]` Implement Hybrid State Checkpointer (JSON primary, Cloudpickle fallback).
+  - `[x]` Setup Core Tracer and OTEL exporter.
+  - `[x]` Implement Determinism Module (random/datetime overriding).
+  - `[ ]` Implement VCR Interceptor Layer (requests/httpx mocking & recording).
+  - `[x]` Implement Hybrid State Checkpointer (JSON primary, Cloudpickle fallback).
 
 - `[ ]` **Phase 3: Framework Adapters**
   - `[ ]` Build LangChain callback handler adapter.
