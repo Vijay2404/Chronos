@@ -1,0 +1,12 @@
+{
+  "name": "chronos-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:ui": "pnpm --filter ui dev",
+    "dev:server": "cd server && uv run uvicorn src.main:app --reload",
+    "dev": "concurrently \"pnpm run dev:ui\" \"pnpm run dev:server\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
