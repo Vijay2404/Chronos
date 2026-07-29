@@ -1,12 +1,13 @@
 """
-Strands Agents + Chronos Integration Test
-
-Demonstrates how Chronos hooks into the Strands Agent lifecycle
-to automatically trace model calls and tool executions.
+Strands Agents + Chronos Integration Test (New DX)
 """
 import os
+import time
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO)
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -16,8 +17,12 @@ load_dotenv()
 if "GEMINI_API_KEY" in os.environ and "GOOGLE_API_KEY" in os.environ:
     del os.environ["GEMINI_API_KEY"]
 
-from chronos import Chronos
-from chronos.interceptors.vcr import VCREngine
+# 1. 🛑 THE HORIZONTAL BAR (MAGIC INIT)
+import chronos
+chronos.init(project="StrandsCalcAgent")
+
+# 2. ⬇️ THE VERTICAL DEPTH (EXPLICIT BINDING)
+from chronos.adapters.strands import ChronosStrandsAdapter
 
 from strands import Agent, tool
 from strands.models.gemini import GeminiModel
@@ -38,30 +43,23 @@ def multiply_numbers(a: int, b: int) -> int:
 def run_demo():
     print("--- Strands Agents + Chronos Integration Test ---")
 
-    tracer = Chronos("StrandsCalcAgent", framework="strands")
-
     model = GeminiModel(model_id="gemini-2.5-flash")
     agent = Agent(model=model, tools=[add_numbers, multiply_numbers])
-    tracer.adapter.attach(agent)
+    
+    # Attach callbacks. The adapter auto-manages trace lifecycles!
+    adapter = ChronosStrandsAdapter()
+    adapter.attach(agent)
     print("[OK] Chronos hooks attached to Strands Agent")
 
-    print("\n>>> RECORD MODE <<<")
-    with VCREngine(mode="record") as vcr:
-        with tracer.trace("strand_session"):
-            result = agent("What is 15 + 27? Then multiply the result by 3.")
-            print(f"Result (Record): {result}")
-
-    cassettes = vcr.cassettes
-
-    print("\n>>> REPLAY MODE <<<")
-    replay_vcr = VCREngine(mode="replay")
-    replay_vcr.load_cassettes(cassettes)
+    start_time = time.time()
+    result = agent("What is 15 + 27? Then multiply the result by 3.")
+    duration = time.time() - start_time
     
-    with replay_vcr:
-        with tracer.trace("strand_session"):
-            result2 = agent("What is 15 + 27? Then multiply the result by 3.")
-            print(f"\nResult (Replay): {result2}")
-        print("\nSUCCESS: Strands Agent fully traced with model + tool lifecycle hooks!")
+    print(f"\nFinal Result: {result}")
+    print(f"Duration: {duration:.2f}s")
+
+    print("\nSUCCESS: Strands Agent fully traced!")
+    print("[i] Run this with `CHRONOS_REPLAY_MODE=1 python simple_strand.py` to test Replay Mode!")
 
 
 if __name__ == "__main__":

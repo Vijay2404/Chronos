@@ -39,7 +39,10 @@ class ChronosRawAdapter:
     - @adapter.step(name)       — wraps a generic agent step (reasoning, planning, etc.)
     """
 
-    def __init__(self, chronos_instance: Any):
+    def __init__(self, chronos_instance: Any = None):
+        if chronos_instance is None:
+            from chronos import get_tracer
+            chronos_instance = get_tracer()
         self.chronos = chronos_instance
 
     def tool(self, name: str = "tool"):
@@ -107,6 +110,11 @@ class ChronosRawAdapter:
         def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args, **kwargs):
+                auto_started = False
+                if not self.chronos.current_trace:
+                    self.chronos.start_trace(name=f"raw_{name}_trace")
+                    auto_started = True
+
                 trace = self.chronos.current_trace
                 if trace:
                     self.chronos.checkpoint(
@@ -128,6 +136,8 @@ class ChronosRawAdapter:
                             "result": _safe_serialize(result)
                         }
                     )
+                if auto_started:
+                    self.chronos.end_trace()
                 return result
             return wrapper
         return decorator

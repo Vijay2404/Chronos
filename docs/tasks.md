@@ -10,8 +10,13 @@
   - `[x]` Implement VCR Interceptor Layer (requests/httpx mocking & recording).
   - `[x]` Implement Hybrid State Checkpointer (JSON primary, Cloudpickle fallback).
 
-- `[ ]` **Phase 3: Framework Adapters**
-  - `[ ]` Build LangChain callback handler adapter.
+- `[x]` **Phase 3: Framework Adapters**
+  - `[x]` Build LangChain callback handler adapter.
+  - `[x]` Build LangGraph integration.
+  - `[x]` Build CrewAI integration.
+  - `[x]` Build Google ADK adapter.
+  - `[x]` Build Strands adapter.
+  - `[x]` Build Raw Python (Vanilla) adapter.
   - `[ ]` Build OpenAI native SDK wrapper.
 
 - `[ ]` **Phase 4: Local Control Plane (MVP)**

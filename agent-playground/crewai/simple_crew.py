@@ -1,7 +1,14 @@
+"""
+CrewAI + Chronos Integration Test (New DX)
+"""
 import os
 import sys
+import time
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO)
 
 if sys.platform == "win32":
     try:
@@ -17,8 +24,13 @@ if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
 
 from crewai import Agent, Task, Crew, Process, LLM
-from chronos import Chronos
-from chronos.interceptors.vcr import VCREngine, VCRMode
+
+# 1. 🛑 THE HORIZONTAL BAR (MAGIC INIT)
+import chronos
+chronos.init(project="TechCrew")
+
+# 2. ⬇️ THE VERTICAL DEPTH (EXPLICIT BINDING)
+from chronos.adapters.crewai import ChronosCrewAIAdapter
 
 
 def is_valid_key(key: str | None) -> bool:
@@ -32,13 +44,10 @@ def run_demo():
     if not is_valid_key(api_key):
         print("\n[!] No valid GEMINI_API_KEY found.")
         print("Please replace 'YOUR_GEMINI_API_KEY' in agent-playground/.env with your actual key from https://aistudio.google.com/")
-        print("Adapter loaded successfully!")
         return
 
-    # Setup Gemini LLM for CrewAI using litellm provider string
     llm = LLM(model="gemini/gemini-flash-latest", api_key=api_key)
 
-    # Define agents
     researcher = Agent(
         role='Senior Research Analyst',
         goal='Summarize key breakthrough in AI in 1 bullet point',
@@ -57,7 +66,6 @@ def run_demo():
         llm=llm
     )
 
-    # Define tasks
     task1 = Task(
         description="Identify 1 major AI trend for 2026.",
         expected_output="1 bullet point string",
@@ -70,35 +78,26 @@ def run_demo():
         agent=writer
     )
 
-    # Setup Chronos
-    tracer = Chronos("TechCrew", framework="crewai")
-
+    # Attach callbacks. The adapter auto-manages trace lifecycles!
+    adapter = ChronosCrewAIAdapter()
+    
     crew = Crew(
         agents=[researcher, writer],
         tasks=[task1, task2],
         verbose=True,
         process=Process.sequential,
-        step_callback=tracer.adapter.get_step_callback(),
-        task_callback=tracer.adapter.get_task_callback()
+        step_callback=adapter.get_step_callback(),
+        task_callback=adapter.get_task_callback()
     )
 
-    print("\n>>> RECORD MODE <<<")
-    with VCREngine(mode="record") as vcr:
-        with tracer.trace("crew_session"):
-            result = crew.kickoff()
-            print("\nFinal Output (Record):", result)
-
-    cassettes = vcr.cassettes
-
-    print("\n>>> REPLAY MODE <<<")
-    replay_vcr = VCREngine(mode="replay")
-    replay_vcr.load_cassettes(cassettes)
+    start_time = time.time()
+    result = crew.kickoff()
+    duration = time.time() - start_time
     
-    with replay_vcr:
-        with tracer.trace("crew_session"):
-            result2 = crew.kickoff()
-            print("\nFinal Output (Replay):", result2)
-    print("\nSUCCESS: Crew perfectly tracked with step and task callbacks using Gemini!")
+    print("\nFinal Output:", result)
+    print(f"Duration: {duration:.2f}s")
+    print("\nSUCCESS: Crew perfectly tracked!")
+    print("[i] Run this with `CHRONOS_REPLAY_MODE=1 python simple_crew.py` to test Replay Mode!")
 
 
 if __name__ == "__main__":

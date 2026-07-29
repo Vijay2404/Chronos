@@ -41,12 +41,15 @@ class ChronosStrandsAdapter:
     - Tool executions (before/after)
     """
 
-    def __init__(self, chronos_instance: Any):
+    def __init__(self, chronos_instance: Any = None):
         if not STRANDS_AVAILABLE:
             raise ImportError(
                 "strands-agents is not installed. "
                 "Install it with: pip install strands-agents"
             )
+        if chronos_instance is None:
+            from chronos import get_tracer
+            chronos_instance = get_tracer()
         self.chronos = chronos_instance
 
     def attach(self, agent: Any) -> None:
@@ -57,6 +60,8 @@ class ChronosStrandsAdapter:
         agent.add_hook(AfterToolCallEvent, self._on_after_tool_call)
 
     def _on_before_model_call(self, event: "BeforeModelCallEvent") -> None:
+        if not self.chronos.current_trace:
+            self.chronos.start_trace(name="strands_agent")
         if self.chronos.current_trace:
             # Safely extract messages from the event
             messages = []
@@ -80,6 +85,8 @@ class ChronosStrandsAdapter:
             )
 
     def _on_before_tool_call(self, event: "BeforeToolCallEvent") -> None:
+        if not self.chronos.current_trace:
+            self.chronos.start_trace(name="strands_agent")
         if self.chronos.current_trace:
             state = {}
             if hasattr(event, 'tool_name'):

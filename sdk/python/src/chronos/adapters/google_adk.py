@@ -13,11 +13,19 @@ class ChronosADKAdapter:
     Chronos adapter for Google ADK.
     """
 
-    def __init__(self, chronos_instance: Any):
+    def __init__(self, chronos_instance: Any = None):
+        if chronos_instance is None:
+            from chronos import get_tracer
+            chronos_instance = get_tracer()
         self.chronos = chronos_instance
+        self._auto_started_trace = False
 
     def before_agent(self, *args: Any, **kwargs: Any) -> Optional[dict]:
         """Called before the agent starts processing."""
+        if not self.chronos.current_trace:
+            self.chronos.start_trace(name="adk_agent")
+            self._auto_started_trace = True
+            
         if self.chronos.current_trace:
             callback_context = kwargs.get("callback_context") or (args[0] if args else None)
             state = {}
@@ -45,6 +53,9 @@ class ChronosADKAdapter:
                 name="adk_agent_end",
                 state=state
             )
+            if self._auto_started_trace:
+                self.chronos.end_trace()
+                self._auto_started_trace = False
         return None
 
     def before_model(self, *args: Any, **kwargs: Any) -> Optional[dict]:

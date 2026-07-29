@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 env/
+.venv/
 build/
 develop-eggs/
 dist/
@@ -34,4 +35,5 @@ wheels/
 
 # Chronos / VCR
 *.cassette.json
+.chronos_cassettes.json
 .chronos/

@@ -36,17 +36,23 @@ class ChronosCheckpointer(MemorySaver):
     and automatically emits `Chronos.step()` events on every state transition.
     """
     
-    def __init__(self, chronos: Any):
+    def __init__(self, chronos: Any = None):
         if not LANGGRAPH_AVAILABLE:
             raise ImportError("langgraph is not installed. Run `pip install langgraph` to use this adapter.")
         super().__init__()
+        if chronos is None:
+            from chronos import get_tracer
+            chronos = get_tracer()
         self.chronos = chronos
         
     def put(self, config: Dict[str, Any], checkpoint: "Checkpoint", metadata: "CheckpointMetadata", new_versions: dict) -> Dict[str, Any]:
         # Save to the underlying memory/storage
         result = super().put(config, checkpoint, metadata, new_versions)
         
-        # Log to Chronos if a trace is active
+        # Log to Chronos if a trace is active (or start one)
+        if not self.chronos.current_trace:
+            self.chronos.start_trace(name="langgraph_agent")
+            
         trace = self.chronos.current_trace
         if trace:
             # LangGraph metadata usually contains the node name that just ran

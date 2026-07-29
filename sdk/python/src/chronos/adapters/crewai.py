@@ -5,13 +5,18 @@ class ChronosCrewAIAdapter:
     """
     Adapter for CrewAI to automatically trace Task executions and Agent steps.
     """
-    def __init__(self, chronos_instance: Any):
+    def __init__(self, chronos_instance: Any = None):
+        if chronos_instance is None:
+            from chronos import get_tracer
+            chronos_instance = get_tracer()
         self.chronos = chronos_instance
         
     def get_task_callback(self) -> Callable:
         """Returns a callback to be passed as `task_callback` to a Crew."""
         def callback(output: Any):
             # CrewAI Task Output
+            if not self.chronos.current_trace:
+                self.chronos.start_trace(name="crewai_agent")
             trace = self.chronos.current_trace
             if trace:
                 safe_output = str(output) if not isinstance(output, dict) else output
@@ -24,6 +29,8 @@ class ChronosCrewAIAdapter:
     def get_step_callback(self) -> Callable:
         """Returns a callback to be passed as `step_callback` to a Crew."""
         def callback(step_output: Any):
+            if not self.chronos.current_trace:
+                self.chronos.start_trace(name="crewai_agent")
             trace = self.chronos.current_trace
             if trace:
                 # Step output might be an AgentAction or dict

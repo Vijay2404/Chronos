@@ -1,10 +1,16 @@
+"""
+LangGraph + Chronos Integration Test (New DX)
+"""
 import os
 import uuid
 import time
+import logging
 from pathlib import Path
 from typing import TypedDict, Annotated
 import operator
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO)
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -16,8 +22,12 @@ if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage
 
-from chronos import Chronos
-from chronos.interceptors.vcr import VCREngine, VCRMode
+# 1. 🛑 THE HORIZONTAL BAR (MAGIC INIT)
+import chronos
+chronos.init(project="JokeGraph")
+
+# 2. ⬇️ THE VERTICAL DEPTH (EXPLICIT BINDING)
+from chronos.adapters.langgraph import ChronosCheckpointer
 
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -81,8 +91,6 @@ def create_graph(use_gemini: bool):
 def run_demo():
     print("--- LangGraph + Chronos Integration Test ---")
 
-    tracer = Chronos("JokeGraph", framework="langgraph")
-
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     use_gemini = is_valid_key(api_key) and GEMINI_AVAILABLE
 
@@ -92,39 +100,20 @@ def run_demo():
         print("[Info] Running fallback node (Set valid GEMINI_API_KEY in agent-playground/.env for real LLM calls).")
 
     builder = create_graph(use_gemini)
-    graph = builder.compile(checkpointer=tracer.callback)
+    
+    # Passing ChronosCheckpointer automatically traces all nodes!
+    graph = builder.compile(checkpointer=ChronosCheckpointer())
 
-    print("\n>>> RECORD MODE <<<")
     start_time = time.time()
-    with VCREngine(mode="record") as vcr:
-        with tracer.trace("joke_session"):
-            config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-            result1 = graph.invoke({"messages": [HumanMessage(content="Tell me a funny programming joke.")]}, config)
+    
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    result1 = graph.invoke({"messages": [HumanMessage(content="Tell me a funny programming joke.")]}, config)
 
     duration1 = time.time() - start_time
 
-    print(f"Final State (Record): {result1['messages'][-1].content}")
-    print(f"Record Duration: {duration1:.2f}s")
-
-    cassettes = vcr.cassettes
-
-    print("\n>>> REPLAY MODE <<<")
-    replay_vcr = VCREngine(mode="replay")
-    replay_vcr.load_cassettes(cassettes)
-    
-    start_time = time.time()
-    with replay_vcr:
-        with tracer.trace("joke_session"):
-            config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-            result2 = graph.invoke({"messages": [HumanMessage(content="Tell me a funny programming joke.")]}, config)
-
-    duration2 = time.time() - start_time
-
-    print(f"Final State (Replay): {result2['messages'][-1].content}")
-    print(f"Replay Duration: {duration2:.2f}s")
-
-    assert result1['messages'][-1].content == result2['messages'][-1].content
-    print("\nSUCCESS: Graph replayed deterministically!")
+    print(f"\nFinal State: {result1['messages'][-1].content}")
+    print(f"Duration: {duration1:.2f}s")
+    print("\n[i] Run this with `CHRONOS_REPLAY_MODE=1 python simple_graph.py` to test Replay Mode!")
 
 
 if __name__ == "__main__":
