@@ -27,6 +27,7 @@ version = "0.1.0"
 source = { virtual = "agent-playground" }
 dependencies = [
     { name = "chronos-sdk" },
+    { name = "chronos-server" },
     { name = "crewai" },
     { name = "google-adk" },
     { name = "google-genai" },
@@ -42,6 +43,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "chronos-sdk", editable = "sdk/python" },
+    { name = "chronos-server", editable = "server" },
     { name = "crewai", specifier = ">=0.28.0" },
     { name = "google-adk", specifier = ">=0.1.0" },
     { name = "google-genai", specifier = ">=0.1.0" },
@@ -783,10 +785,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "chronos-sdk" },
+    { name = "chronos-server" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "chronos-sdk", editable = "sdk/python" }]
+requires-dist = [
+    { name = "chronos-sdk", editable = "sdk/python" },
+    { name = "chronos-server", editable = "server" },
+]
 
 [[package]]
 name = "click"

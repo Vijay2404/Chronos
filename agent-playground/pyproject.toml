@@ -14,8 +14,10 @@ dependencies = [
     "langchain-openai>=0.1.0",
     "crewai>=0.28.0",
     "strands-agents>=0.1.0",
-    "google-adk>=0.1.0"
+    "google-adk>=0.1.0",
+    "chronos-server"
 ]
 
 [tool.uv.sources]
 chronos-sdk = { workspace = true }
+chronos-server = { workspace = true }

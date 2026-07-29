@@ -3,11 +3,13 @@ name = "chronos-workspace"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "chronos-sdk"
+    "chronos-sdk",
+    "chronos-server"
 ]
 
 [tool.uv.sources]
 chronos-sdk = { workspace = true }
+chronos-server = { workspace = true }
 
 [tool.uv.workspace]
 members = [

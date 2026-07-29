@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 import cloudpickle
+import urllib.request
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from contextlib import contextmanager
@@ -10,6 +11,18 @@ from chronos.core.schemas import AgentTrace, AgentSpan, CheckpointEvent
 from chronos.core.determinism import deterministic_context
 
 logger = logging.getLogger("chronos.sdk")
+
+def _post_event(endpoint: str, data: Any):
+    try:
+        req = urllib.request.Request(
+            f"http://localhost:8555/api/{endpoint}", 
+            data=data.model_dump_json().encode('utf-8'), 
+            headers={'Content-Type': 'application/json'}, 
+            method="POST"
+        )
+        urllib.request.urlopen(req)
+    except Exception as e:
+        logger.debug(f"[Chronos] Failed to post {endpoint} to server: {e}")
 
 class Chronos:
     """Core SDK entrypoint for Chronos. Manages trace/step lifecycles and state checkpointing."""
@@ -47,6 +60,7 @@ class Chronos:
         self.active_spans = []
         self.events = []
         logger.info(f"[Chronos] Started trace {trace_id} ({self.current_trace.name})")
+        _post_event("traces", self.current_trace)
         return self.current_trace
 
     def end_trace(self, status: str = "success") -> Optional[AgentTrace]:
@@ -58,6 +72,7 @@ class Chronos:
         self.current_trace.end_time = datetime.utcnow()
         self.current_trace.status = status
         logger.info(f"[Chronos] Ended trace {self.current_trace.trace_id} with status '{status}'")
+        _post_event("traces", self.current_trace)
         
         finished_trace = self.current_trace
         self.current_trace = None
@@ -115,6 +130,7 @@ class Chronos:
             span_obj.duration_ms = (end_time - start_time).total_seconds() * 1000.0
             self.active_spans.pop()
             self.events.append(span_obj)
+            _post_event("spans", span_obj)
 
     # Alias step as span for OpenTelemetry compatibility
     span = step
@@ -157,6 +173,7 @@ class Chronos:
 
         self.events.append(checkpoint_event)
         logger.info(f"[Chronos] State checkpoint captured (binary={is_binary})")
+        _post_event("checkpoints", checkpoint_event)
         return checkpoint_event
 
     # Alias snapshot as checkpoint for user preference

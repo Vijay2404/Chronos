@@ -1,6 +1,9 @@
 import enum
 import hashlib
 import logging
+import urllib.request
+import urllib.error
+import json
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
@@ -51,15 +54,39 @@ class VCREngine:
         if isinstance(mode, str):
             mode = VCRMode(mode.upper())
         self.mode = mode
-        self.cassettes: List[VCRCassette] = []
         self._original_requests_send = None
         self._original_httpx_send = None
         self._original_httpx_async_send = None
         self._is_active = False
 
     def load_cassettes(self, cassettes: List[VCRCassette]):
-        """Load pre-recorded cassettes for REPLAY mode."""
-        self.cassettes = cassettes
+        pass  # Deprecated in Phase 4: Server handles storage
+
+    def _save_cassette_to_server(self, cassette: VCRCassette):
+        cassette_dict = cassette.model_dump()
+        cassette_dict["hash"] = self._hash_request(cassette.request.method, cassette.request.url, cassette.request.body)
+        req = urllib.request.Request(
+            "http://localhost:8555/api/cassettes", 
+            data=json.dumps(cassette_dict).encode('utf-8'), 
+            headers={'Content-Type': 'application/json'}, 
+            method="POST"
+        )
+        try:
+            urllib.request.urlopen(req)
+        except Exception as e:
+            logger.warning(f"[Chronos VCR] Failed to save cassette to server: {e}")
+
+    def _fetch_cassette_from_server(self, target_hash: str) -> Optional[VCRCassette]:
+        req = urllib.request.Request(f"http://localhost:8555/api/cassettes/{target_hash}", method="GET")
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+                return VCRCassette(**data)
+        except urllib.error.HTTPError as e:
+            return None
+        except Exception as e:
+            logger.warning(f"[Chronos VCR] Failed to fetch cassette from server: {e}")
+            return None
 
     def _hash_request(self, method: str, url: str, body: Optional[str]) -> str:
         """Generate a matching hash for request matching during replay."""
@@ -89,30 +116,32 @@ class VCREngine:
                     resp = engine_self._original_requests_send(session_self, request, **kwargs)
                     vcr_req = VCRRequest(method=req_method, url=req_url, body=req_body)
                     vcr_resp = VCRResponse(status_code=resp.status_code, headers=dict(resp.headers), body=resp.text)
-                    engine_self.cassettes.append(VCRCassette(request=vcr_req, response=vcr_resp))
+                    cassette = VCRCassette(request=vcr_req, response=vcr_resp)
+                    engine_self._save_cassette_to_server(cassette)
                     logger.info(f"[Chronos VCR] Recorded requests {req_method} {req_url} -> {resp.status_code}")
                     return resp
 
                 elif engine_self.mode == VCRMode.REPLAY:
                     target_hash = engine_self._hash_request(req_method, req_url, req_body)
-                    for cassette in engine_self.cassettes:
-                        c_hash = engine_self._hash_request(cassette.request.method, cassette.request.url, cassette.request.body)
-                        if c_hash == target_hash:
-                            logger.info(f"[Chronos VCR] Replaying cached requests {req_method} {req_url} (0ms, 0 tokens)")
-                            synth_resp = requests.Response()
-                            synth_resp.status_code = cassette.response.status_code
-                            synth_resp._content = cassette.response.body.encode("utf-8")
-                            
-                            # Remove compression headers since we return uncompressed string bytes
-                            headers = dict(cassette.response.headers)
-                            headers.pop("Content-Encoding", None)
-                            headers.pop("content-encoding", None)
-                            headers.pop("Content-Length", None)
-                            headers.pop("content-length", None)
-                            
-                            synth_resp.headers.update(headers)
-                            synth_resp.url = req_url
-                            return synth_resp
+                    cassette = engine_self._fetch_cassette_from_server(target_hash)
+                    
+                    if cassette:
+                        logger.info(f"[Chronos VCR] Replaying cached requests {req_method} {req_url} (0ms, 0 tokens)")
+                        synth_resp = requests.Response()
+                        synth_resp.status_code = cassette.response.status_code
+                        synth_resp._content = cassette.response.body.encode("utf-8")
+                        
+                        # Remove compression headers since we return uncompressed string bytes
+                        headers = dict(cassette.response.headers)
+                        headers.pop("Content-Encoding", None)
+                        headers.pop("content-encoding", None)
+                        headers.pop("Content-Length", None)
+                        headers.pop("content-length", None)
+                        
+                        synth_resp.headers.update(headers)
+                        synth_resp.url = req_url
+                        return synth_resp
+                        
                     raise RuntimeError(f"[Chronos VCR] No cached cassette found for REPLAY of {req_method} {req_url}")
 
             requests.sessions.Session.send = patched_requests_send
@@ -140,30 +169,30 @@ class VCREngine:
                     resp.read()
                     vcr_req = VCRRequest(method=req_method, url=req_url, body=req_body)
                     vcr_resp = VCRResponse(status_code=resp.status_code, headers=dict(resp.headers), body=resp.text)
-                    engine_self.cassettes.append(VCRCassette(request=vcr_req, response=vcr_resp))
+                    cassette = VCRCassette(request=vcr_req, response=vcr_resp)
+                    engine_self._save_cassette_to_server(cassette)
                     logger.info(f"[Chronos VCR] Recorded httpx {req_method} {req_url} -> {resp.status_code}")
                     return resp
                     
                 elif engine_self.mode == VCRMode.REPLAY:
                     target_hash = engine_self._hash_request(req_method, req_url, req_body)
-                    for cassette in engine_self.cassettes:
-                        c_hash = engine_self._hash_request(cassette.request.method, cassette.request.url, cassette.request.body)
-                        if c_hash == target_hash:
-                            logger.info(f"[Chronos VCR] Replaying cached httpx {req_method} {req_url} (0ms, 0 tokens)")
-                            
-                            headers = dict(cassette.response.headers)
-                            headers.pop("Content-Encoding", None)
-                            headers.pop("content-encoding", None)
-                            headers.pop("Content-Length", None)
-                            headers.pop("content-length", None)
-                            
-                            return httpx.Response(
-                                status_code=cassette.response.status_code,
-                                headers=httpx.Headers(headers),
-                                content=cassette.response.body.encode("utf-8"),
-                                request=request
-                            )
-                    raise RuntimeError(f"[Chronos VCR] No cached cassette found for REPLAY of {req_method} {req_url}")
+                    cassette = engine_self._fetch_cassette_from_server(target_hash)
+                    if cassette:
+                        logger.info(f"[Chronos VCR] Replaying cached httpx {req_method} {req_url} (0ms, 0 tokens)")
+                        
+                        headers = dict(cassette.response.headers)
+                        headers.pop("Content-Encoding", None)
+                        headers.pop("content-encoding", None)
+                        headers.pop("Content-Length", None)
+                        headers.pop("content-length", None)
+                        
+                        return httpx.Response(
+                            status_code=cassette.response.status_code,
+                            headers=httpx.Headers(headers),
+                            content=cassette.response.body.encode("utf-8"),
+                            request=request
+                        )
+                    raise RuntimeError(f"[Chronos VCR] No cached cassette found for REPLAY of {req_method} {req_url}. Hash: {target_hash}")
 
             async def patched_httpx_async_send(client_self, request, **kwargs):
                 if engine_self.mode == VCRMode.PASSTHROUGH:
@@ -185,7 +214,8 @@ class VCREngine:
                             headers.pop("Content-Encoding", None)
                             headers.pop("content-encoding", None)
                             vcr_resp = VCRResponse(status_code=resp.status_code, headers=headers, body=body_bytes.decode("utf-8", errors="replace"))
-                            engine_self.cassettes.append(VCRCassette(request=vcr_req, response=vcr_resp))
+                            cassette = VCRCassette(request=vcr_req, response=vcr_resp)
+                            engine_self._save_cassette_to_server(cassette)
                             logger.info(f"[Chronos VCR] Recorded httpx async STREAM {req_method} {req_url} -> {resp.status_code} ({len(body_bytes)} bytes)")
                         
                         resp.stream = VCRAsyncStreamWrapper(resp.stream, on_stream_complete)
@@ -195,29 +225,29 @@ class VCREngine:
                         await resp.aread()
                         vcr_req = VCRRequest(method=req_method, url=req_url, body=req_body)
                         vcr_resp = VCRResponse(status_code=resp.status_code, headers=dict(resp.headers), body=resp.text)
-                        engine_self.cassettes.append(VCRCassette(request=vcr_req, response=vcr_resp))
+                        cassette = VCRCassette(request=vcr_req, response=vcr_resp)
+                        engine_self._save_cassette_to_server(cassette)
                         logger.info(f"[Chronos VCR] Recorded httpx async {req_method} {req_url} -> {resp.status_code}")
                         return resp
                     
                 elif engine_self.mode == VCRMode.REPLAY:
                     target_hash = engine_self._hash_request(req_method, req_url, req_body)
-                    for cassette in engine_self.cassettes:
-                        c_hash = engine_self._hash_request(cassette.request.method, cassette.request.url, cassette.request.body)
-                        if c_hash == target_hash:
-                            logger.info(f"[Chronos VCR] Replaying cached httpx async {req_method} {req_url} (0ms, 0 tokens)")
-                            
-                            headers = dict(cassette.response.headers)
-                            headers.pop("Content-Encoding", None)
-                            headers.pop("content-encoding", None)
-                            headers.pop("Content-Length", None)
-                            headers.pop("content-length", None)
-                            
-                            return httpx.Response(
-                                status_code=cassette.response.status_code,
-                                headers=httpx.Headers(headers),
-                                content=cassette.response.body.encode("utf-8"),
-                                request=request
-                            )
+                    cassette = engine_self._fetch_cassette_from_server(target_hash)
+                    if cassette:
+                        logger.info(f"[Chronos VCR] Replaying cached httpx async {req_method} {req_url} (0ms, 0 tokens)")
+                        
+                        headers = dict(cassette.response.headers)
+                        headers.pop("Content-Encoding", None)
+                        headers.pop("content-encoding", None)
+                        headers.pop("Content-Length", None)
+                        headers.pop("content-length", None)
+                        
+                        return httpx.Response(
+                            status_code=cassette.response.status_code,
+                            headers=httpx.Headers(headers),
+                            content=cassette.response.body.encode("utf-8"),
+                            request=request
+                        )
                     raise RuntimeError(f"[Chronos VCR] No cached cassette found for REPLAY of {req_method} {req_url}")
 
             httpx.Client.send = patched_httpx_send
