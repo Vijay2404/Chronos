@@ -1,103 +1,131 @@
 import os
 import uuid
 import time
+from pathlib import Path
 from typing import TypedDict, Annotated
 import operator
+from dotenv import load_dotenv
+
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+load_dotenv()
+
+if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
+
 from langgraph.graph import StateGraph, START, END
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage
 
 from chronos import Chronos
-# pyrefly: ignore [missing-import]
-from chronos.adapters.langgraph import ChronosCheckpointer
 from chronos.interceptors.vcr import VCREngine, VCRMode
 
-# Simple state schema
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+
+def is_valid_key(key: str | None) -> bool:
+    return bool(key and key.strip() and not key.startswith("YOUR_"))
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], operator.add]
 
-# Define nodes
-def llm_node(state: AgentState):
-    # Using a fake/test API key since we'll mock it soon, but for real recording, you'd need a real key.
-    # For this test without spending tokens, let's just make it a mock LLM or rely on VCR strictly if we have a real key.
-    # Wait, to test it, the user might not have OPENAI_API_KEY set.
-    # Let's write a simple dummy function first that doesn't strictly need OpenAI, or we can use it and catch the error.
-    pass
 
-# Wait, if we want to test robust execution without a real API key right now, 
-# we can just make a mock node that uses `requests` to fetch a joke, proving the network VCR and state tracking works.
-import requests
+def create_graph(use_gemini: bool):
+    builder = StateGraph(AgentState)
 
-def fetch_joke_node(state: AgentState):
-    print("[Node] Fetching joke...")
-    resp = requests.get("https://official-joke-api.appspot.com/random_joke")
-    joke_data = resp.json()
-    joke_text = f"{joke_data['setup']} - {joke_data['punchline']}"
-    return {"messages": [SystemMessage(content=joke_text)]}
+    if use_gemini and GEMINI_AVAILABLE:
+        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0)
 
-def evaluate_joke_node(state: AgentState):
-    print("[Node] Evaluating joke deterministically...")
-    import random
-    # Deterministic choice based on Chronos seed
-    rating = random.choice(["Terrible", "Hilarious", "Meh"])
-    return {"messages": [SystemMessage(content=f"Rating: {rating}")]}
+        def llm_generate_node(state: AgentState):
+            print("[Node] Calling Gemini model...")
+            response = llm.invoke(state["messages"])
+            return {"messages": [response]}
 
-# Build graph
-builder = StateGraph(AgentState)
-builder.add_node("fetch", fetch_joke_node)
-builder.add_node("evaluate", evaluate_joke_node)
-builder.add_edge(START, "fetch")
-builder.add_edge("fetch", "evaluate")
-builder.add_edge("evaluate", END)
+        def summarize_node(state: AgentState):
+            print("[Node] Summarizing via Gemini...")
+            prompt = [HumanMessage(content=f"Summarize this in 3 words: {state['messages'][-1].content}")]
+            summary = llm.invoke(prompt)
+            return {"messages": [summary]}
+
+        builder.add_node("llm", llm_generate_node)
+        builder.add_node("summarize", summarize_node)
+        builder.add_edge(START, "llm")
+        builder.add_edge("llm", "summarize")
+        builder.add_edge("summarize", END)
+    else:
+        import requests
+        def fetch_joke_node(state: AgentState):
+            print("[Node] Fetching joke...")
+            resp = requests.get("https://official-joke-api.appspot.com/random_joke")
+            joke_data = resp.json()
+            joke_text = f"{joke_data['setup']} - {joke_data['punchline']}"
+            return {"messages": [SystemMessage(content=joke_text)]}
+
+        def evaluate_joke_node(state: AgentState):
+            print("[Node] Evaluating joke...")
+            return {"messages": [SystemMessage(content="Rating: Hilarious")]}
+
+        builder.add_node("fetch", fetch_joke_node)
+        builder.add_node("evaluate", evaluate_joke_node)
+        builder.add_edge(START, "fetch")
+        builder.add_edge("fetch", "evaluate")
+        builder.add_edge("evaluate", END)
+
+    return builder
+
 
 def run_demo():
     print("--- LangGraph + Chronos Integration Test ---")
-    
-    chronos = Chronos(agent_name="JokeGraph")
-    checkpointer = ChronosCheckpointer(chronos)
-    graph = builder.compile(checkpointer=checkpointer)
-    
-    trace_id = uuid.uuid4()
-    
-    # --- RECORD MODE ---
+
+    tracer = Chronos("JokeGraph", framework="langgraph")
+
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    use_gemini = is_valid_key(api_key) and GEMINI_AVAILABLE
+
+    if use_gemini:
+        print("[Info] Running with real Google Gemini LLM calls!")
+    else:
+        print("[Info] Running fallback node (Set valid GEMINI_API_KEY in agent-playground/.env for real LLM calls).")
+
+    builder = create_graph(use_gemini)
+    graph = builder.compile(checkpointer=tracer.callback)
+
     print("\n>>> RECORD MODE <<<")
-    vcr = VCREngine(mode=VCRMode.RECORD)
-    vcr.enable()
-    
     start_time = time.time()
-    with chronos.trace("joke_session", force_trace_id=trace_id):
-        # We must pass a thread_id config for langgraph checkpointers to work
-        config = {"configurable": {"thread_id": "1"}}
-        result1 = graph.invoke({"messages": [HumanMessage(content="Tell me a joke")]}, config)
-        
+    with VCREngine(mode="record") as vcr:
+        with tracer.trace("joke_session"):
+            config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+            result1 = graph.invoke({"messages": [HumanMessage(content="Tell me a funny programming joke.")]}, config)
+
     duration1 = time.time() - start_time
-    vcr.disable()
-    
+
     print(f"Final State (Record): {result1['messages'][-1].content}")
     print(f"Record Duration: {duration1:.2f}s")
-    
-    # Save cassettes
+
     cassettes = vcr.cassettes
-    
-    # --- REPLAY MODE ---
+
     print("\n>>> REPLAY MODE <<<")
-    replay_vcr = VCREngine(mode=VCRMode.REPLAY)
+    replay_vcr = VCREngine(mode="replay")
     replay_vcr.load_cassettes(cassettes)
-    replay_vcr.enable()
     
     start_time = time.time()
-    with chronos.trace("joke_session", force_trace_id=trace_id):
-        config = {"configurable": {"thread_id": "2"}} # New thread to force fresh execution
-        result2 = graph.invoke({"messages": [HumanMessage(content="Tell me a joke")]}, config)
-        
+    with replay_vcr:
+        with tracer.trace("joke_session"):
+            config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+            result2 = graph.invoke({"messages": [HumanMessage(content="Tell me a funny programming joke.")]}, config)
+
     duration2 = time.time() - start_time
-    replay_vcr.disable()
-    
+
     print(f"Final State (Replay): {result2['messages'][-1].content}")
     print(f"Replay Duration: {duration2:.2f}s")
-    
+
     assert result1['messages'][-1].content == result2['messages'][-1].content
-    print("\nSUCCESS: Graph perfectly replayed deterministically and network-free!")
+    print("\nSUCCESS: Graph replayed deterministically!")
+
 
 if __name__ == "__main__":
     run_demo()

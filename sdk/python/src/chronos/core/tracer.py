@@ -14,11 +14,26 @@ logger = logging.getLogger("chronos.sdk")
 class Chronos:
     """Core SDK entrypoint for Chronos. Manages trace/step lifecycles and state checkpointing."""
 
-    def __init__(self, agent_name: str = "default_agent"):
+    def __init__(self, agent_name: str = "default_agent", framework: str = "auto"):
         self.agent_name = agent_name
         self.current_trace: Optional[AgentTrace] = None
         self.active_spans: List[AgentSpan] = []
         self.events: List[Any] = []  # Holds steps/spans and checkpoints for the current trace
+        
+        # Framework initialization
+        if framework == "auto":
+            framework = _detect_framework()
+            
+        if framework not in _FRAMEWORK_LOADERS:
+            raise ValueError(
+                f"Unknown framework '{framework}'. "
+                f"Choose from: {', '.join(sorted(_FRAMEWORK_LOADERS.keys()))}, auto"
+            )
+            
+        loader_name = _FRAMEWORK_LOADERS[framework]
+        loader_fn = globals()[loader_name]
+        self.adapter = loader_fn(self)
+        self.callback = self.adapter
 
     def start_trace(self, name: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> AgentTrace:
         """Starts a new agent execution trace."""
@@ -49,11 +64,11 @@ class Chronos:
         return finished_trace
 
     @contextmanager
-    def trace(self, name: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None, force_trace_id: Optional[uuid.UUID] = None):
+    def trace(self, name: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None, _force_trace_id: Optional[uuid.UUID] = None):
         """Context manager to start and automatically end an agent trace."""
         trace_obj = self.start_trace(name=name, metadata=metadata)
-        if force_trace_id:
-            trace_obj.trace_id = force_trace_id
+        if _force_trace_id:
+            trace_obj.trace_id = _force_trace_id
             
         try:
             # Wrap the entire execution in the deterministic context using the trace_id as the seed
@@ -146,3 +161,64 @@ class Chronos:
 
     # Alias snapshot as checkpoint for user preference
     snapshot = checkpoint
+
+
+# ── Adapter factory ──────────────────────────────────────────────────
+
+_FRAMEWORK_LOADERS = {
+    "langchain": "_load_langchain",
+    "langgraph": "_load_langgraph",
+    "crewai": "_load_crewai",
+    "google_adk": "_load_google_adk",
+    "strands": "_load_strands",
+    "raw": "_load_raw",
+}
+
+
+def _load_langchain(tracer: Chronos) -> Any:
+    from chronos.adapters.langchain import ChronosLangchainCallback
+    return ChronosLangchainCallback(tracer)
+
+
+def _load_langgraph(tracer: Chronos) -> Any:
+    from chronos.adapters.langgraph import ChronosCheckpointer
+    return ChronosCheckpointer(tracer)
+
+
+def _load_crewai(tracer: Chronos) -> Any:
+    from chronos.adapters.crewai import ChronosCrewAIAdapter
+    return ChronosCrewAIAdapter(tracer)
+
+
+def _load_google_adk(tracer: Chronos) -> Any:
+    from chronos.adapters.google_adk import ChronosADKAdapter
+    return ChronosADKAdapter(tracer)
+
+
+def _load_strands(tracer: Chronos) -> Any:
+    from chronos.adapters.strands import ChronosStrandsAdapter
+    return ChronosStrandsAdapter(tracer)
+
+
+def _load_raw(tracer: Chronos) -> Any:
+    from chronos.adapters.raw_python import ChronosRawAdapter
+    return ChronosRawAdapter(tracer)
+
+
+def _detect_framework() -> str:
+    """Auto-detect which agent framework is installed."""
+    detection_order = [
+        ("google.adk", "google_adk"),
+        ("langgraph", "langgraph"),
+        ("langchain", "langchain"),
+        ("crewai", "crewai"),
+        ("strands", "strands"),
+    ]
+    for module_name, framework_key in detection_order:
+        try:
+            __import__(module_name)
+            return framework_key
+        except ImportError:
+            continue
+    return "raw"
+

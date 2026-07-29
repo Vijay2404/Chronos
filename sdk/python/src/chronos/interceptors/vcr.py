@@ -1,7 +1,7 @@
 import enum
 import hashlib
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
 class VCRAsyncStreamWrapper:
@@ -47,7 +47,9 @@ class VCRCassette(BaseModel):
 class VCREngine:
     """VCR Engine for recording and replaying HTTP interactions."""
 
-    def __init__(self, mode: VCRMode = VCRMode.RECORD):
+    def __init__(self, mode: Union[VCRMode, str] = VCRMode.RECORD):
+        if isinstance(mode, str):
+            mode = VCRMode(mode.upper())
         self.mode = mode
         self.cassettes: List[VCRCassette] = []
         self._original_requests_send = None
@@ -64,7 +66,7 @@ class VCREngine:
         raw = f"{method.upper()}:{url}:{body or ''}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def enable(self):
+    def start(self):
         """Enable HTTP monkey-patching for the requests library."""
         if self._is_active:
             return
@@ -227,7 +229,7 @@ class VCREngine:
         self._is_active = True
         logger.info(f"[Chronos VCR] Enabled in {self.mode.value} mode")
 
-    def disable(self):
+    def stop(self):
         """Restore original unpatched functions."""
         if not self._is_active:
             return
@@ -249,4 +251,11 @@ class VCREngine:
             pass
 
         self._is_active = False
-        logger.info("[Chronos VCR] Disabled")
+        logger.info("[Chronos VCR] Stopped")
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()

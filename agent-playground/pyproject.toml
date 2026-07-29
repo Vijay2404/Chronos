@@ -7,10 +7,14 @@ dependencies = [
     "chronos-sdk",
     "requests",
     "python-dotenv",
+    "google-genai>=0.1.0",
+    "langchain-google-genai>=1.0.0",
     "langgraph>=0.1.0",
     "langchain>=0.1.0",
     "langchain-openai>=0.1.0",
-    "crewai>=0.28.0"
+    "crewai>=0.28.0",
+    "strands-agents>=0.1.0",
+    "google-adk>=0.1.0"
 ]
 
 [tool.uv.sources]
