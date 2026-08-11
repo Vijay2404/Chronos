@@ -51,7 +51,6 @@ def init(project: str = "default_agent") -> None:
     if _global_tracer is not None:
         return  # Already initialized
 
-    _ensure_server_running()
 
     _global_tracer = Chronos(agent_name=project)
     

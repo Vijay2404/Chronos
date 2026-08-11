@@ -69,4 +69,8 @@ class ChronosCheckpointer(MemorySaver):
                 state=safe_state
             )
             
+            # Emit a span for the UI graph to render
+            with self.chronos.step(name=str(node_name)):
+                pass
+            
         return result
